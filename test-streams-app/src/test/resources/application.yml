@@ -1,0 +1,2 @@
+kafka.streams:
+  "state.dir": target/state-dir

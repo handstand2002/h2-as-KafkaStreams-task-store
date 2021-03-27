@@ -4,43 +4,86 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import lombok.Builder;
-import lombok.Singular;
+import lombok.Value;
 
-@Builder
-public final class WhereClause<K, V> {
+@Value
+public class WhereClause<K, V> {
 
-  @Singular
-  private final Collection<ColumnComparator<K>> keyColumnComparators;
-  @Singular
-  private final Collection<ColumnComparator<V>> valueColumnComparators;
+  ColumnComparatorGroup<K, V> root;
 
-  public static <K, V> WhereClause<K, V> all() {
-    return WhereClause.<K, V>builder().build();
+  public static <K, V> WhereClause<K, V> childGroupAnd(IndexedStateStore<K, V> forStore,
+      Consumer<ColumnComparatorGroup.Builder<K, V>> build) {
+    return create(ComparatorGroupType.AND, build);
   }
 
-  SqlWhereStatement createSql() {
-    if (keyColumnComparators.isEmpty() && valueColumnComparators.isEmpty()) {
+  public static <K, V> WhereClause<K, V> childGroupOr(IndexedStateStore<K, V> forStore,
+      Consumer<ColumnComparatorGroup.Builder<K, V>> build) {
+    return create(ComparatorGroupType.OR, build);
+  }
+
+  private static <K, V> WhereClause<K, V> create(ComparatorGroupType type,
+      Consumer<ColumnComparatorGroup.Builder<K, V>> builder) {
+    ColumnComparatorGroup.Builder<K, V> b = ColumnComparatorGroup.newBuilder(type);
+    builder.accept(b);
+
+    return new WhereClause<>(b.build());
+  }
+
+  public static <K, V> WhereClause<K, V> all() {
+    return WhereClause.create(ComparatorGroupType.AND, b -> {
+    });
+  }
+
+  private static SqlWhereStatement createSql(ComparatorGroupType type,
+      Collection<ColumnComparator<?>> comparators) {
+    String columnComparisonString = comparators.stream()
+        .map(c -> String.format("%s %s ?", c.getColumn().getName(), c.getSqlComparator()))
+        .collect(Collectors.joining(String.format(" %s ", type.name())));
+
+    List<Object> params = comparators.stream()
+        .map(ColumnComparator::getCompareValue)
+        .collect(Collectors.toList());
+
+    return new SqlWhereStatement(columnComparisonString, params);
+  }
+
+  public SqlWhereStatement createSql() {
+    SqlWhereStatement sql = createSql(root, true);
+    if (!sql.getSql().isEmpty()) {
+      return new SqlWhereStatement("WHERE " + sql.getSql(), sql.getParameters());
+    }
+    return sql;
+  }
+
+  private SqlWhereStatement createSql(ColumnComparatorGroup<K, V> group, boolean isUpperEmpty) {
+    if (group.getKeyComparators().isEmpty() && group.getValueComparators().isEmpty()
+        && group.getChildren().isEmpty()) {
       return new SqlWhereStatement("", Collections.emptyList());
     }
 
     Collection<ColumnComparator<?>> comparators = new LinkedList<>();
-    comparators.addAll(addPrefixToColumnNames(keyColumnComparators, "key_"));
-    comparators.addAll(addPrefixToColumnNames(valueColumnComparators, "value_"));
+    comparators.addAll(addPrefixToColumnNames(group.getKeyComparators(), IndexedStateStore.KEY_COLUMN_PREFIX));
+    comparators.addAll(addPrefixToColumnNames(group.getValueComparators(), IndexedStateStore.VALUE_COLUMN_PREFIX));
 
-    String columnComparisonString = comparators.stream()
-        .map(c -> String.format("%s %s ?", c.getColumn().getName(), c.getSqlComparator()))
-        .collect(Collectors.joining(" AND "));
+    SqlWhereStatement sql = createSql(group.getType(), comparators);
+    StringBuilder sqlBuilder = new StringBuilder("(");
+    sqlBuilder.append(sql.getSql());
+    List<Object> params = sql.getParameters();
 
-    List<Object> params = Stream.of(keyColumnComparators, valueColumnComparators)
-        .flatMap(Collection::stream)
-        .map(ColumnComparator::getCompareValue)
-        .collect(Collectors.toList());
+    for (ColumnComparatorGroup<K, V> child : group.getChildren()) {
+      SqlWhereStatement childSql = createSql(child, sqlBuilder.length() == 0);
 
-    String sqlWhere = String.format("WHERE %s", columnComparisonString);
-    return new SqlWhereStatement(sqlWhere, params);
+      if (sqlBuilder.length() > 0 || !isUpperEmpty) {
+        sqlBuilder.append(String.format(" %s ", group.getType().name()));
+      }
+      sqlBuilder.append(childSql.getSql());
+      params.addAll(childSql.getParameters());
+    }
+    sqlBuilder.append(")");
+
+    return new SqlWhereStatement(sqlBuilder.toString(), params);
   }
 
   private <T> Collection<ColumnComparator<T>> addPrefixToColumnNames(

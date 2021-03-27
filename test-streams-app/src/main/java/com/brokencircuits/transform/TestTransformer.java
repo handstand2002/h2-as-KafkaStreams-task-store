@@ -7,7 +7,9 @@ import com.brokencircuits.streams.serdes.SingleTopicBasedSerde;
 import com.brokencircuits.streams.store.indexed.ColumnDetails;
 import com.brokencircuits.streams.store.indexed.ColumnType;
 import com.brokencircuits.streams.store.indexed.IndexedStateStore;
+import com.brokencircuits.streams.store.indexed.SqlWhereStatement;
 import com.brokencircuits.streams.store.indexed.WhereClause;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +34,7 @@ public class TestTransformer implements Transformer<Key, Value, KeyValue<Key, Va
 
   @Override
   public void init(ProcessorContext context) {
+
     store = IndexedStateStore.<Key, Value>builder()
         .context(context)
         .underlying(context.getStateStore(STORE_NAME))
@@ -44,6 +47,17 @@ public class TestTransformer implements Transformer<Key, Value, KeyValue<Key, Va
 
   @Override
   public KeyValue<Key, Value> transform(Key key, Value value) {
+
+    WhereClause<Key, Value> whereClause = WhereClause.childGroupOr(store, root ->
+        root.compareKey(id1Column, "=", "key1-3")
+            .compareKey(id1Column, "=", "key2-4"));
+
+    SqlWhereStatement sql = whereClause.createSql();
+    log.info("SQL WHERE: {}", sql.getSql());
+    log.info("Params: {}", sql.getParameters());
+    Iterator<KeyValue<Key, Value>> where = store.where(whereClause);
+    where.forEachRemaining(kv -> log.info("Result: {}", kv));
+
     log.info("Updating store: {} | {}", key, value);
     for (int i = 0; i < 5; i++) {
       String suffix = "-" + i;

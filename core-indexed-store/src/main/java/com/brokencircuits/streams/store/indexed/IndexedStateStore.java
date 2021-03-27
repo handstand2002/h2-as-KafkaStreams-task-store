@@ -35,9 +35,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @Slf4j
 public class IndexedStateStore<K, V> implements Closeable {
 
-  private static final String KEY_COLUMN_PREFIX = "key_";
-  private static final String VALUE_COLUMN_PREFIX = "value_";
-  private static final String RAW_KEY_COLUMN = "rawkey";
+  static final String KEY_COLUMN_PREFIX = "KEY_";
+  static final String VALUE_COLUMN_PREFIX = "VALUE_";
+  static final String RAW_KEY_COLUMN = "RAWKEY";
   private final List<EnhancedColumnDetails<?>> columns = new LinkedList<>();
   private final SingleTopicBasedSerde<K> keySerde;
   private final String tableName;
@@ -232,7 +232,7 @@ public class IndexedStateStore<K, V> implements Closeable {
     return String.format("CREATE HASH INDEX %s_%s ON %1$s(%2$s)", tableName, col.getName());
   }
 
-  public String sqlCreateStmt() {
+  private String sqlCreateStmt() {
 
     List<String> statements = new LinkedList<>();
 

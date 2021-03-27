@@ -4,7 +4,6 @@ import com.brokencircuits.config.StreamPropertyConfig;
 import com.brokencircuits.domain.Key;
 import com.brokencircuits.domain.Topic;
 import com.brokencircuits.domain.Value;
-import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;

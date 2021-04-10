@@ -64,8 +64,10 @@ public class WhereClause<K, V> {
     }
 
     Collection<ColumnComparator<?>> comparators = new LinkedList<>();
-    comparators.addAll(addPrefixToColumnNames(group.getKeyComparators(), IndexedStateStore.KEY_COLUMN_PREFIX));
-    comparators.addAll(addPrefixToColumnNames(group.getValueComparators(), IndexedStateStore.VALUE_COLUMN_PREFIX));
+    comparators.addAll(
+        addPrefixToColumnNames(group.getKeyComparators(), IndexedStateStore.KEY_COLUMN_PREFIX));
+    comparators.addAll(
+        addPrefixToColumnNames(group.getValueComparators(), IndexedStateStore.VALUE_COLUMN_PREFIX));
 
     SqlWhereStatement sql = createSql(group.getType(), comparators);
     StringBuilder sqlBuilder = new StringBuilder("(");
